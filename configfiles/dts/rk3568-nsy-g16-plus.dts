@@ -22,10 +22,12 @@
 
 	chosen: chosen {
 		stdout-path = "serial2:1500000n8";
+		bootargs = "console=ttyS2,1500000n8 earlycon=uart8250,mmio32,0xfe660000 rootwait root=/dev/mtdblock2 rootfstype=squashfs";
+		rockchip,bootdev = "sfc";
 	};
 
 	fiq-debugger {
-		compatible = "rockchip,fiq-debugger";
+        compatible = "rockchip,fiq-debugger";
 		rockchip,serial-id = <2>;
 		rockchip,wake-irq = <0>;
 		/* If enable uart uses irq instead of fiq */
@@ -37,14 +39,7 @@
 		status = "okay";
 	};
 
-	debug: debug@fd904000 {
-		compatible = "rockchip,debug";
-		reg = <0x0 0xfd904000 0x0 0x1000>,
-			<0x0 0xfd905000 0x0 0x1000>,
-			<0x0 0xfd906000 0x0 0x1000>,
-			<0x0 0xfd907000 0x0 0x1000>;
-	};
-
+        
 	dc_12v: dc-12v {
 		compatible = "regulator-fixed";
 		regulator-name = "dc_12v";
@@ -299,21 +294,22 @@
 	};
 
 	rtlgsw@0 {
-		compatible = "realtek,rtl8367s";
+		compatible = "realtek,rtl8367s", "realtek,rtl8367c", "realtek,rtl8367b";
 		realtek,mdio = <&mdio0>;
-		mii-bus = <&mdio0>;
 		realtek,id = <29>;
-		phy-id = <29>;
 		cpu_port = <7>;
-
 		//txdelay, rxdelay, mode, ability.force_mode, ability.txpause, ability.rxpause, ability.link, ability.duplex, speed
 		//sgmii,
 		realtek,extif1 = <0 0 11 1 1 1 1 1 2>;
 		//rgmii
 		realtek,extif2 = <0 0 1 1 1 1 1 1 2>;
+		realtek,vlan-tag = <1>;
+        realtek,phy-base = <0>;
 		status = "okay";
 	};
 };
+
+
 
 &i2c0 {
 
@@ -589,6 +585,17 @@
 		};
 	};
 
+    spi2m0_pins: spi2m0-pins {
+            rockchip,pins =
+                <2 RK_PB1 4 &pcfg_pull_none>,   // SPI0_CLK
+                <2 RK_PB2 4 &pcfg_pull_none>,   // SPI0_MOSI
+                <2 RK_PB3 4 &pcfg_pull_none>;   // SPI0_MISO
+        };
+
+    spi0m0_cs0: spi0m0-cs0 {
+        rockchip,pins = <2 RK_PB4 4 &pcfg_pull_none>;  // SPI0_CS0
+    };
+
 	regulator-en {
 		vcc3v3_lcd0_n_en: vcc3v3-lcd0-n-en {
 			rockchip,pins = <0 RK_PC7 RK_FUNC_GPIO &pcfg_pull_none>;
@@ -708,6 +715,7 @@
 		vpcie3v3-supply = <&vcc3v3_pcie>;
 		reset-gpios = <&gpio4 RK_PC4 GPIO_ACTIVE_HIGH>;
 		status = "okay";
+		vpcie3v3-supply = <&vcc3v3_pcie>;
 		num-lanes = <0x2>;
 		pinctrl-0 = <&pcie30x2_reset_h>;
 };
@@ -724,6 +732,7 @@
 &pcie2x1 {
 		reset-gpios = <&gpio3 RK_PC1 GPIO_ACTIVE_HIGH>;
 		pinctrl-0 = <&pcie2x1_reset_h>;
+		vpcie3v3-supply = <&vcc3v3_pcie>;
 		//for kernel.dts
 		rockchip,perst-inactive-ms = <500>;
 		status = "okay";
@@ -988,15 +997,50 @@
 };
 
 &sfc {
-	status = "okay";
+    status = "okay";
+    pinctrl-names = "default";
+    pinctrl-0 = <&spi2m0_pins &spi2m0_cs0>;
+    
+    flash@0 {
+        compatible = "jedec,spi-nor";
+        reg = <0>;
+        spi-max-frequency = <25000000>;
+        spi-rx-bus-width = <4>;
+        spi-tx-bus-width = <1>;
 
-	flash@0 {
-		compatible = "spi-nor";
-		reg = <0>;
-		spi-max-frequency = <25000000>;
-		spi-rx-bus-width = <4>;
-		spi-tx-bus-width = <1>;
-	};
+        partitions {
+            compatible = "fixed-partitions";
+            #address-cells = <1>;
+            #size-cells = <1>;
+
+            partition@0 {
+                label = "u-boot";
+                reg = <0x000000 0x200000>;
+                read-only;
+            };
+
+            partition@200000 {
+                label = "u-boot-env";
+                reg = <0x200000 0x100000>;
+            };
+
+            partition@300000 {
+                label = "firmware";
+                reg = <0x300000 0x1c00000>;
+            };
+            
+            partition@1e00000 {
+                label = "factory";
+                reg = <0x1e00000 0x100000>;
+                read-only;
+            };
+
+            partition@1f00000 {
+                label = "rootfs_data";
+                reg = <0x1f00000 0x100000>;
+            };
+        };
+    };
 };
 
 &rng {
